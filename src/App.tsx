@@ -256,11 +256,15 @@ export default function App() {
         return;
       }
 
-      const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". Yanıtın eğitici, motive edici ve kısa olsun. 
+      const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". 
       
-      Eğer öğrenci "beni sına" veya "soru sor" derse, ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. 
-      ÖNEMLİ: Sorular "LGS Yeni Nesil" tarzında olsun. Yani sadece bilgi değil, mantık yürütme, tablo/grafik yorumlama veya günlük hayat senaryosu içersin. 
-      Çeldiriciler (yanlış şıklar) çok güçlü olmalı, öğrenciyi gerçekten düşündürmeli.
+      TALİMATLAR:
+      1. DERİN ARAŞTIRMA: Konuyu derinlemesine incele, sadece yüzeysel bilgi verme. Akademik ve güncel bilgileri kullan.
+      2. DETAYLI CEVAP: Yanıtların açıklayıcı, mantıksal temellere dayanan ve öğrencinin konuyu tam kavramasını sağlayacak detayda olsun.
+      3. MOTİVASYON: Öğrenciyi her zaman teşvik et ve merakını canlı tut.
+      
+      Eğer öğrenci "beni sına", "soru sor" derse veya "Soru Oluştur" butonuna basarsa (mesajda bu yönde bir talep varsa), ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. 
+      ÖNEMLİ: Sorular "LGS Yeni Nesil" tarzında olsun. Bilgi, mantık, tablo/grafik yorumlama içersin. 
       Soruyu şu formatta sor: "SORU: [Soru metni] A) [Seçenek] B) [Seçenek] C) [Seçenek] D) [Seçenek] CEVAP: [Doğru Şık] YAKIN: [Doğruya en yakın, en güçlü çeldirici şık]"` }];
       
       if (image) {
@@ -274,7 +278,10 @@ export default function App() {
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts }]
+        contents: [{ role: 'user', parts }],
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
       });
 
       const aiText = response.text || "";
@@ -848,6 +855,14 @@ export default function App() {
                   placeholder="Bir soru sor, fotoğraf gönder veya /resim [konu] yaz..."
                   className="flex-1 bg-white/5 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-violet-500/50 transition-all text-inherit"
                 />
+                <button 
+                  onClick={() => handleStudyMessage("Bana rastgele bir soru oluştur ve konuyu tartışalım.")}
+                  className="p-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all flex items-center gap-2 font-bold"
+                  title="Rastgele Soru Oluştur"
+                >
+                  <Sparkles size={20} />
+                  <span className="hidden md:inline">Soru Oluştur</span>
+                </button>
                 <button 
                   onClick={() => handleStudyMessage(aiInput, selectedImage || undefined)}
                   className="p-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition-all"
