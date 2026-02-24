@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Permanent+Marker&family=Bungee&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-punk: "Permanent Marker", cursive;
+  --font-bungee: "Bungee", cursive;
+}
+
+:root {
+  --color-bg: #0a0510;
+  --color-accent: #8b5cf6;
+  --color-text: #f5f3ff;
+  --glass-surface: rgba(139, 92, 246, 0.05);
+  --glass-border: rgba(139, 92, 246, 0.2);
+  --font-main: var(--font-sans);
+}
+
+[data-theme="punk"] {
+  --color-bg: #000000;
+  --color-accent: #ff00ff;
+  --color-text: #00ff00;
+  --glass-surface: rgba(255, 0, 255, 0.1);
+  --glass-border: #00ff00;
+  --font-main: var(--font-mono);
+}
+
+[data-theme="fragpunk"] {
+  --color-bg: #050505;
+  --color-accent: #ff003c;
+  --color-text: #ffffff;
+  --glass-surface: rgba(255, 0, 60, 0.15);
+  --glass-border: #ff003c;
+  --font-main: var(--font-punk);
+}
+
+[data-theme="modern"] {
+  --color-bg: #ffffff;
+  --color-accent: #000000;
+  --color-text: #1a1a1a;
+  --glass-surface: rgba(0, 0, 0, 0.02);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --font-main: var(--font-sans);
+}
+
+[data-theme="philosophical"] {
+  --color-bg: #f5f2ed;
+  --color-accent: #5a5a40;
+  --color-text: #1a1a1a;
+  --glass-surface: rgba(90, 90, 64, 0.05);
+  --glass-border: rgba(90, 90, 64, 0.2);
+  --font-main: var(--font-serif);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-main);
+  overflow-x: hidden;
+  transition: background-color 0.5s ease, color 0.5s ease, font-family 0.5s ease;
+}
+
+.atmosphere {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background: 
+    radial-gradient(circle at 20% 30%, #2e1065 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #4c1d95 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, #0a0510 0%, #000 100%);
+  filter: blur(80px);
+  opacity: 0.6;
+  transition: opacity 0.5s ease, background 0.5s ease;
+}
+
+[data-theme="punk"] .atmosphere {
+  background: 
+    radial-gradient(circle at 20% 30%, #ff00ff 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #00ff00 0%, transparent 50%);
+  opacity: 0.3;
+}
+
+[data-theme="fragpunk"] .atmosphere {
+  background: 
+    radial-gradient(circle at 20% 30%, #ff003c 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #000000 0%, transparent 50%);
+  opacity: 0.4;
+}
+
+[data-theme="modern"] .atmosphere {
+  opacity: 0;
+}
+
+[data-theme="philosophical"] .atmosphere {
+  background: radial-gradient(circle at 50% 50%, #e5e7eb 0%, #f5f2ed 100%);
+  opacity: 0.4;
+}
+
+.glass-card {
+  background: var(--glass-surface);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+[data-theme="fragpunk"] .text-glow {
+  text-shadow: 0 0 20px rgba(255, 0, 60, 0.6);
+}
+
+[data-theme="punk"] .text-glow {
+  text-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
