@@ -43,7 +43,7 @@ const FadeInView = ({ children, delay = 0, className = "" }: FadeInViewProps) =>
   </motion.div>
 );
 
-type View = 'home' | 'study' | 'quiz' | 'battle-royale';
+type View = 'home' | 'study' | 'quiz' | 'battle-royale' | 'pdf-library';
 
 interface Book {
   id: string;
@@ -52,6 +52,22 @@ interface Book {
   icon: React.ReactNode;
   description: string;
 }
+
+interface PdfBook {
+  title: string;
+  subject: string;
+  url: string;
+  thumbnail: string;
+}
+
+const pdfBooks: PdfBook[] = [
+  { title: '8. Sınıf Matematik Ders Kitabı', subject: 'Matematik', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/math/200/300' },
+  { title: '8. Sınıf Fen Bilimleri Ders Kitabı', subject: 'Fen Bilimleri', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/science/200/300' },
+  { title: '8. Sınıf Türkçe Ders Kitabı', subject: 'Türkçe', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/turkish/200/300' },
+  { title: '8. Sınıf İnkılap Tarihi Ders Kitabı', subject: 'İnkılap Tarihi', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/history/200/300' },
+  { title: '8. Sınıf İngilizce Ders Kitabı', subject: 'İngilizce', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/english/200/300' },
+  { title: '8. Sınıf Din Kültürü Ders Kitabı', subject: 'Din Kültürü', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/religion/200/300' },
+];
 
 interface Message {
   role: 'user' | 'model';
@@ -436,11 +452,19 @@ export default function App() {
             {[
               { name: 'Yapay Zeka', id: 'yapay-zeka' },
               { name: 'Dersler', id: 'egitimler' },
+              { name: 'PDF Kitaplar', id: 'pdf-library' },
               { name: 'Kütüphane', id: 'kutuphane' },
             ].map((item) => (
               <button 
                 key={item.id} 
-                onClick={() => { setView('home'); setTimeout(() => scrollToSection(item.id), 100); }}
+                onClick={() => { 
+                  if (item.id === 'pdf-library') {
+                    setView('pdf-library');
+                  } else {
+                    setView('home'); 
+                    setTimeout(() => scrollToSection(item.id), 100); 
+                  }
+                }}
                 onMouseEnter={() => playSound('hover')}
                 className="hover:text-violet-400 transition-colors relative group"
               >
@@ -947,6 +971,67 @@ export default function App() {
                 </div>
               </motion.div>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* PDF Library View */}
+      {view === 'pdf-library' && (
+        <section className="pt-32 pb-20 px-6 min-h-screen">
+          <div className="max-w-7xl mx-auto">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-between items-center mb-12"
+            >
+              <div>
+                <h2 className="text-4xl font-bold tracking-tighter mb-2">MEB PDF Kütüphanesi</h2>
+                <p className="text-violet-200/40">Milli Eğitim Bakanlığı resmi ders kitaplarına buradan ulaşabilirsin.</p>
+              </div>
+              <button 
+                onClick={() => setView('home')}
+                className="px-6 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2"
+              >
+                <Home size={18} />
+                Ana Sayfa
+              </button>
+            </motion.div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+              {pdfBooks.map((pdf, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.05 }}
+                  whileHover={{ y: -10 }}
+                  className="glass-card group cursor-pointer overflow-hidden flex flex-col"
+                  onClick={() => {
+                    playSound('click');
+                    window.open(pdf.url, '_blank');
+                  }}
+                >
+                  <div className="aspect-[3/4] relative overflow-hidden">
+                    <img 
+                      src={pdf.thumbnail} 
+                      alt={pdf.title} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+                      <span className="text-white font-bold flex items-center gap-2">
+                        <BookOpen size={18} />
+                        Şimdi Oku
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-2 block">{pdf.subject}</span>
+                    <h3 className="text-lg font-bold leading-tight group-hover:text-violet-400 transition-colors">{pdf.title}</h3>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
       )}
