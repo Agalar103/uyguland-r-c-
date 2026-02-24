@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
-import { Sparkles, Brain, Zap, Rocket, ChevronRight, Play, Cpu, Globe, MessageSquare, Copy, Check, Settings, X, Palette, BookOpen, Layers, CreditCard, Star, Mic, Volume2, Send, Trophy, RefreshCw, Home } from "lucide-react";
+import { Sparkles, Brain, Zap, Rocket, ChevronRight, Play, Cpu, Globe, MessageSquare, Copy, Check, Settings, X, Palette, BookOpen, Layers, CreditCard, Star, Mic, Volume2, Send, Trophy, RefreshCw, Home, Image as ImageIcon, Paperclip } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
@@ -43,7 +43,7 @@ const FadeInView = ({ children, delay = 0, className = "" }: FadeInViewProps) =>
   </motion.div>
 );
 
-type View = 'home' | 'study' | 'quiz';
+type View = 'home' | 'study' | 'quiz' | 'battle-royale';
 
 interface Book {
   id: string;
@@ -56,15 +56,21 @@ interface Book {
 interface Message {
   role: 'user' | 'model';
   text: string;
+  image?: string;
   options?: string[];
   correctAnswer?: string;
-  type?: 'text' | 'quiz';
+  closeAnswer?: string;
+  type?: 'text' | 'quiz' | 'image';
 }
 
 const books: Book[] = [
   { id: 'matematik', title: 'Matematik', color: 'from-blue-500 to-indigo-600', icon: <Layers />, description: 'Çarpanlar, Katlar, Üslü İfadeler ve daha fazlası.' },
   { id: 'fen', title: 'Fen Bilimleri', color: 'from-emerald-500 to-teal-600', icon: <Cpu />, description: 'DNA, Genetik Kod, Mevsimler ve İklim.' },
   { id: 'turkce', title: 'Türkçe', color: 'from-orange-500 to-red-600', icon: <BookOpen />, description: 'Fiilimsiler, Cümle Ögeleri ve Paragraf.' },
+  { id: 'inkilap', title: 'İnkılap Tarihi', color: 'from-red-500 to-amber-600', icon: <Star />, description: 'T.C. İnkılâp Tarihi ve Atatürkçülük.' },
+  { id: 'ingilizce', title: 'İngilizce', color: 'from-violet-500 to-purple-600', icon: <Globe />, description: 'Yabancı Dil (İngilizce) Kelime ve Dil Bilgisi.' },
+  { id: 'biyoloji', title: 'Biyoloji', color: 'from-green-500 to-emerald-600', icon: <Brain />, description: 'Canlılar ve Yaşam, Hücre ve Kalıtım.' },
+  { id: 'tarih', title: 'Tarih', color: 'from-stone-500 to-neutral-600', icon: <Layers />, description: 'Dünya ve Türk Tarihi Kronolojisi.' },
 ];
 
 export default function App() {
@@ -76,6 +82,9 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState<Message[]>([]);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
+  const [answerStatus, setAnswerStatus] = useState<{[key: number]: 'correct' | 'incorrect' | 'close' | null}>({});
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [voiceType, setVoiceType] = useState<'male' | 'female'>('female');
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [aiInput, setAiInput] = useState("");
@@ -84,6 +93,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>('default');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({
@@ -129,6 +140,18 @@ export default function App() {
   const speak = (text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'tr-TR';
+    
+    // Try to find a matching voice
+    const voices = window.speechSynthesis.getVoices();
+    const filteredVoices = voices.filter(v => v.lang.includes('tr'));
+    
+    if (voiceType === 'female') {
+      // Usually female voices have "Google" or "Microsoft" names that are female-coded or just the default
+      utterance.voice = filteredVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira')) || filteredVoices[0];
+    } else {
+      utterance.voice = filteredVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('tolga')) || filteredVoices[0];
+    }
+    
     window.speechSynthesis.speak(utterance);
   };
 
@@ -149,21 +172,62 @@ export default function App() {
     recognition.start();
   };
 
-  const handleStudyMessage = async (text: string) => {
-    if (!text.trim() || !selectedBook) return;
+  const handleStudyMessage = async (text: string, image?: string) => {
+    if ((!text.trim() && !image) || !selectedBook) return;
     
-    const userMsg: Message = { role: 'user', text };
+    const userMsg: Message = { role: 'user', text, image };
     setChatMessages(prev => [...prev, userMsg]);
     setAiInput("");
+    setSelectedImage(null);
     setIsGenerating(true);
     playSound('click');
 
     try {
+      // Handle /resim command
+      if (text.startsWith('/resim ')) {
+        const prompt = text.replace('/resim ', '');
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: [{ parts: [{ text: `${prompt}, educational illustration for 8th grade students, clean, professional style` }] }],
+          config: { imageConfig: { aspectRatio: "1:1" } }
+        });
+
+        let imageUrl = "";
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+          if (part.inlineData) {
+            imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+            break;
+          }
+        }
+
+        if (imageUrl) {
+          setChatMessages(prev => [...prev, { 
+            role: 'model', 
+            text: `İşte senin için hazırladığım "${prompt}" görseli:`, 
+            image: imageUrl,
+            type: 'image'
+          }]);
+          playSound('success');
+        } else {
+          throw new Error("Görsel oluşturulamadı.");
+        }
+        return;
+      }
+
+      const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". Yanıtın eğitici, motive edici ve kısa olsun. Eğer öğrenci "beni sına" veya "soru sor" derse, ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. Soruyu şu formatta sor: "SORU: [Soru metni] A) [Seçenek] B) [Seçenek] C) [Seçenek] D) [Seçenek] CEVAP: [Doğru Şık]"` }];
+      
+      if (image) {
+        parts.push({
+          inlineData: {
+            data: image.split(',')[1],
+            mimeType: "image/png"
+          }
+        });
+      }
+
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [
-          { role: 'user', parts: [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". Yanıtın eğitici, motive edici ve kısa olsun. Eğer öğrenci "beni sına" veya "soru sor" derse, ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. Soruyu şu formatta sor: "SORU: [Soru metni] A) [Seçenek] B) [Seçenek] C) [Seçenek] D) [Seçenek] CEVAP: [Doğru Şık]"` }] }
-        ]
+        contents: [{ role: 'user', parts }]
       });
 
       const aiText = response.text || "";
@@ -197,24 +261,42 @@ export default function App() {
     }
   };
 
-  const startQuiz = async () => {
-    setView('quiz');
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+        playSound('click');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const startQuiz = async (isBattleRoyale = false) => {
+    setView(isBattleRoyale ? 'battle-royale' : 'quiz');
     setQuizFinished(false);
     setQuizScore(0);
     setCurrentQuizIndex(0);
+    setAnswerStatus({});
+    setSelectedAnswer(null);
     setIsGenerating(true);
     playSound('click');
+
+    const questionCount = isBattleRoyale ? 100 : 5;
+    const subjects = books.map(b => b.title).join(", ");
 
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `8. sınıf Matematik ve Fen Bilimleri konularından karışık 5 adet çoktan seçmeli soru hazırla. Her soru için şu formatı kullan: 
+        contents: `8. sınıf ${subjects} konularından karışık ${questionCount} adet çoktan seçmeli soru hazırla. Her soru için şu formatı kullan: 
         SORU: [Soru metni] 
         A) [Seçenek] 
         B) [Seçenek] 
         C) [Seçenek] 
         D) [Seçenek] 
         CEVAP: [Doğru Şık]
+        YAKIN: [Eğer varsa, doğruya en yakın olan yanlış şıkkı belirt, yoksa boş bırak]
         Sorular arasına "---" koy.`
       });
 
@@ -223,16 +305,19 @@ export default function App() {
       const parsedQuestions: Message[] = questionBlocks.map(block => {
         const questionPart = block.split("SORU:")[1]?.split("A)")[0]?.trim() || "Soru yüklenemedi.";
         const options = ["A", "B", "C", "D"].map(opt => {
-          const regex = new RegExp(`${opt}\\)\\s*(.*?)(?=\\s*[B-D]\\)|\\s*CEVAP:|$)`, 's');
+          const regex = new RegExp(`${opt}\\)\\s*(.*?)(?=\\s*[B-D]\\)|\\s*CEVAP:|\\s*YAKIN:|$)`, 's');
           const match = block.match(regex);
           return match ? `${opt}) ${match[1].trim()}` : "";
         });
         const answerMatch = block.match(/CEVAP:\s*([A-D])/);
+        const closeMatch = block.match(/YAKIN:\s*([A-D])/);
+        
         return {
           role: 'model' as const,
           text: questionPart,
           options: options.filter(o => o !== ""),
           correctAnswer: answerMatch ? answerMatch[1] : undefined,
+          closeAnswer: closeMatch ? closeMatch[1] : undefined,
           type: 'quiz' as const
         };
       }).filter(q => q.options && q.options.length > 0);
@@ -246,19 +331,35 @@ export default function App() {
   };
 
   const handleQuizAnswer = (answer: string) => {
-    const currentQ = quizQuestions[currentQuizIndex];
+    if (selectedAnswer) return; // Prevent multiple clicks
+    
+    setSelectedAnswer(answer);
+    const currentQ = quizQuestions[currentQuizIndex] as any;
+    let status: 'correct' | 'incorrect' | 'close' = 'incorrect';
+
     if (answer === currentQ.correctAnswer) {
       setQuizScore(prev => prev + (100 / quizQuestions.length));
+      status = 'correct';
       playSound('success');
+    } else if (answer === currentQ.closeAnswer) {
+      setQuizScore(prev => prev + (50 / quizQuestions.length)); // Half points for close answer?
+      status = 'close';
+      playSound('hover');
     } else {
+      status = 'incorrect';
       playSound('error');
     }
 
-    if (currentQuizIndex < quizQuestions.length - 1) {
-      setCurrentQuizIndex(prev => prev + 1);
-    } else {
-      setQuizFinished(true);
-    }
+    setAnswerStatus(prev => ({ ...prev, [currentQuizIndex]: status }));
+
+    setTimeout(() => {
+      setSelectedAnswer(null);
+      if (currentQuizIndex < quizQuestions.length - 1) {
+        setCurrentQuizIndex(prev => prev + 1);
+      } else {
+        setQuizFinished(true);
+      }
+    }, 1500);
   };
 
   const themes: { id: Theme; name: string; color: string }[] = [
@@ -315,6 +416,15 @@ export default function App() {
           </div>
 
           <div className="flex gap-4">
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onMouseEnter={() => playSound('hover')}
+              onClick={() => { playSound('click'); startQuiz(true); }}
+              className="px-6 py-2.5 rounded-full bg-red-600/20 border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-600/30 transition-all"
+            >
+              Battle Royale
+            </motion.button>
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -386,6 +496,14 @@ export default function App() {
                 >
                   Ders Başla
                   <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                </button>
+                <button 
+                  onMouseEnter={() => playSound('hover')}
+                  onClick={() => { playSound('click'); startQuiz(true); }}
+                  className="px-10 py-5 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-bold text-lg shadow-2xl shadow-red-900/40 transition-all flex items-center gap-3"
+                >
+                  <Zap size={20} />
+                  Battle Royale (100 Soru)
                 </button>
                 <button 
                   onMouseEnter={() => playSound('hover')}
@@ -585,6 +703,11 @@ export default function App() {
                       ? 'bg-violet-600 text-white rounded-tr-none' 
                       : 'bg-white/5 border border-white/10 text-inherit rounded-tl-none'
                   }`}>
+                    {msg.image && (
+                      <div className="mb-3 rounded-lg overflow-hidden border border-white/10">
+                        <img src={msg.image} alt="Uploaded" className="max-w-full h-auto" />
+                      </div>
+                    )}
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                     
                     {msg.options && (
@@ -627,7 +750,31 @@ export default function App() {
 
             {/* Chat Input */}
             <div className="p-6 bg-white/5 border-t border-white/10">
+              {selectedImage && (
+                <div className="mb-4 relative inline-block">
+                  <img src={selectedImage} alt="Selected" className="w-20 h-20 object-cover rounded-lg border border-violet-500/50" />
+                  <button 
+                    onClick={() => setSelectedImage(null)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
               <div className="flex gap-4">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleImageUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-4 bg-white/5 hover:bg-white/10 text-violet-400 rounded-xl transition-all"
+                >
+                  <Paperclip size={20} />
+                </button>
                 <button 
                   onClick={startListening}
                   className={`p-4 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-white/5 hover:bg-white/10 text-violet-400'}`}
@@ -638,12 +785,12 @@ export default function App() {
                   type="text"
                   value={aiInput}
                   onChange={(e) => setAiInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleStudyMessage(aiInput)}
-                  placeholder="Bir soru sor veya 'beni sına' de..."
+                  onKeyDown={(e) => e.key === 'Enter' && handleStudyMessage(aiInput, selectedImage || undefined)}
+                  placeholder="Bir soru sor, fotoğraf gönder veya /resim [konu] yaz..."
                   className="flex-1 bg-white/5 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-violet-500/50 transition-all text-inherit"
                 />
                 <button 
-                  onClick={() => handleStudyMessage(aiInput)}
+                  onClick={() => handleStudyMessage(aiInput, selectedImage || undefined)}
                   className="p-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition-all"
                 >
                   <Send size={20} />
@@ -654,15 +801,18 @@ export default function App() {
         </section>
       )}
 
-      {/* Quiz View */}
-      {view === 'quiz' && (
+      {/* Quiz & Battle Royale View */}
+      {(view === 'quiz' || view === 'battle-royale') && (
         <section className="pt-32 pb-20 px-6 min-h-screen flex items-center justify-center">
-          <div className="max-w-2xl mx-auto w-full glass-card p-10 shadow-2xl">
+          <div className={`max-w-2xl mx-auto w-full glass-card p-10 shadow-2xl border-2 ${view === 'battle-royale' ? 'border-red-500/30' : 'border-white/5'}`}>
             {!quizFinished ? (
               <>
                 <div className="flex justify-between items-center mb-10">
-                  <h2 className="text-2xl font-bold tracking-tighter">Kendini Test Et</h2>
-                  <div className="px-4 py-1 bg-violet-500/20 text-violet-400 rounded-full text-sm font-bold">
+                  <h2 className="text-2xl font-bold tracking-tighter flex items-center gap-2">
+                    {view === 'battle-royale' && <Zap className="text-red-500 animate-pulse" size={24} />}
+                    {view === 'battle-royale' ? 'Battle Royale' : 'Kendini Test Et'}
+                  </h2>
+                  <div className={`px-4 py-1 ${view === 'battle-royale' ? 'bg-red-500/20 text-red-400' : 'bg-violet-500/20 text-violet-400'} rounded-full text-sm font-bold`}>
                     Soru {currentQuizIndex + 1} / {quizQuestions.length}
                   </div>
                 </div>
@@ -682,16 +832,41 @@ export default function App() {
                       {quizQuestions[currentQuizIndex].text}
                     </p>
                     <div className="grid grid-cols-1 gap-4">
-                      {quizQuestions[currentQuizIndex].options?.map((opt, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleQuizAnswer(opt.charAt(0))}
-                          className="p-5 text-left bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/50 rounded-2xl transition-all group"
-                        >
-                          <span className="font-bold text-violet-400 mr-3 group-hover:text-white transition-colors">{opt.charAt(0)})</span>
-                          {opt.substring(3)}
-                        </button>
-                      ))}
+                      {quizQuestions[currentQuizIndex].options?.map((opt, i) => {
+                        const char = opt.charAt(0);
+                        const isSelected = selectedAnswer === char;
+                        const status = answerStatus[currentQuizIndex];
+                        
+                        let bgColor = "bg-white/5";
+                        let borderColor = "border-white/10";
+                        
+                        if (isSelected || (status && char === quizQuestions[currentQuizIndex].correctAnswer)) {
+                          if (char === quizQuestions[currentQuizIndex].correctAnswer) {
+                            bgColor = "bg-emerald-500/20";
+                            borderColor = "border-emerald-500/50";
+                          } else if (char === quizQuestions[currentQuizIndex].closeAnswer) {
+                            bgColor = "bg-orange-500/20";
+                            borderColor = "border-orange-500/50";
+                          } else if (isSelected) {
+                            bgColor = "bg-red-500/20";
+                            borderColor = "border-red-500/50";
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={i}
+                            disabled={!!selectedAnswer}
+                            onClick={() => handleQuizAnswer(char)}
+                            className={`p-5 text-left ${bgColor} ${borderColor} border rounded-2xl transition-all group relative overflow-hidden`}
+                          >
+                            <span className={`font-bold ${isSelected ? 'text-white' : 'text-violet-400'} mr-3 transition-colors`}>{char})</span>
+                            {opt.substring(3)}
+                            {isSelected && status === 'correct' && <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />}
+                            {isSelected && status === 'incorrect' && <X className="absolute right-4 top-1/2 -translate-y-1/2 text-red-400" />}
+                          </button>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 ) : (
@@ -710,18 +885,20 @@ export default function App() {
                 <div className="w-24 h-24 bg-violet-500/20 rounded-full flex items-center justify-center mx-auto mb-8">
                   <Trophy size={48} className="text-violet-400" />
                 </div>
-                <h2 className="text-4xl font-bold mb-4">Test Tamamlandı!</h2>
+                <h2 className="text-4xl font-bold mb-4">{view === 'battle-royale' ? 'Battle Royale Bitti!' : 'Test Tamamlandı!'}</h2>
                 <div className="text-6xl font-black text-violet-500 mb-6">
                   {Math.round(quizScore)}
                   <span className="text-2xl text-violet-200/40 font-normal"> / 100</span>
                 </div>
                 <p className="text-violet-200/40 mb-10 max-w-sm mx-auto">
-                  {quizScore >= 70 ? 'Harika bir iş çıkardın! Konuları gayet iyi kavramışsın.' : 'Biraz daha çalışarak puanını yükseltebilirsin. AI öğretmenine soru sormayı unutma!'}
+                  {view === 'battle-royale' 
+                    ? `100 soruluk maratonu tamamladın! Skorun: ${Math.round(quizScore)}. Gerçek bir savaşçısın!`
+                    : quizScore >= 70 ? 'Harika bir iş çıkardın! Konuları gayet iyi kavramışsın.' : 'Biraz daha çalışarak puanını yükseltebilirsin. AI öğretmenine soru sormayı unutma!'}
                 </p>
                 <div className="flex gap-4 justify-center">
                   <button 
-                    onClick={startQuiz}
-                    className="px-8 py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold flex items-center gap-2 transition-all"
+                    onClick={() => startQuiz(view === 'battle-royale')}
+                    className={`px-8 py-4 ${view === 'battle-royale' ? 'bg-red-600 hover:bg-red-500' : 'bg-violet-600 hover:bg-violet-500'} text-white rounded-xl font-bold flex items-center gap-2 transition-all`}
                   >
                     <RefreshCw size={20} />
                     Tekrar Çöz
@@ -802,7 +979,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3 mb-6">
                   {themes.map((t) => (
                     <button
                       key={t.id}
@@ -823,6 +1000,26 @@ export default function App() {
                       {theme === t.id && <Check size={14} className="ml-auto text-violet-400" />}
                     </button>
                   ))}
+                </div>
+
+                <div className="flex items-center gap-2 text-violet-400 mb-4">
+                  <Volume2 size={18} />
+                  <h3 className="font-bold uppercase tracking-widest text-xs">Seslendirme</h3>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setVoiceType('female'); playSound('click'); }}
+                    className={`flex-1 py-2 rounded-lg border ${voiceType === 'female' ? 'bg-violet-600 border-violet-500' : 'bg-white/5 border-white/10'} text-[10px] font-bold transition-all`}
+                  >
+                    Kadın Sesi
+                  </button>
+                  <button
+                    onClick={() => { setVoiceType('male'); playSound('click'); }}
+                    className={`flex-1 py-2 rounded-lg border ${voiceType === 'male' ? 'bg-violet-600 border-violet-500' : 'bg-white/5 border-white/10'} text-[10px] font-bold transition-all`}
+                  >
+                    Erkek Sesi
+                  </button>
                 </div>
               </motion.div>
             </>
