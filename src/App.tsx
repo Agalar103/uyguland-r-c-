@@ -156,20 +156,46 @@ export default function App() {
   };
 
   const startListening = () => {
-    if (!('webkitSpeechRecognition' in window)) {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
       alert("Tarayıcınız ses tanımayı desteklemiyor.");
       return;
     }
-    const recognition = new (window as any).webkitSpeechRecognition();
-    recognition.lang = 'tr-TR';
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setAiInput(transcript);
-      handleStudyMessage(transcript);
-    };
-    recognition.start();
+    
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'tr-TR';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        playSound('click');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        playSound('error');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setAiInput(transcript);
+          handleStudyMessage(transcript);
+        }
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error("Speech recognition start error:", error);
+      setIsListening(false);
+    }
   };
 
   const handleStudyMessage = async (text: string, image?: string) => {
@@ -214,7 +240,12 @@ export default function App() {
         return;
       }
 
-      const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". Yanıtın eğitici, motive edici ve kısa olsun. Eğer öğrenci "beni sına" veya "soru sor" derse, ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. Soruyu şu formatta sor: "SORU: [Soru metni] A) [Seçenek] B) [Seçenek] C) [Seçenek] D) [Seçenek] CEVAP: [Doğru Şık]"` }];
+      const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". Yanıtın eğitici, motive edici ve kısa olsun. 
+      
+      Eğer öğrenci "beni sına" veya "soru sor" derse, ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. 
+      ÖNEMLİ: Sorular "LGS Yeni Nesil" tarzında olsun. Yani sadece bilgi değil, mantık yürütme, tablo/grafik yorumlama veya günlük hayat senaryosu içersin. 
+      Çeldiriciler (yanlış şıklar) çok güçlü olmalı, öğrenciyi gerçekten düşündürmeli.
+      Soruyu şu formatta sor: "SORU: [Soru metni] A) [Seçenek] B) [Seçenek] C) [Seçenek] D) [Seçenek] CEVAP: [Doğru Şık] YAKIN: [Doğruya en yakın, en güçlü çeldirici şık]"` }];
       
       if (image) {
         parts.push({
@@ -237,16 +268,18 @@ export default function App() {
       if (aiText.includes("SORU:") && aiText.includes("A)")) {
         const questionPart = aiText.split("SORU:")[1].split("A)")[0].trim();
         const options = ["A", "B", "C", "D"].map(opt => {
-          const regex = new RegExp(`${opt}\\)\\s*(.*?)(?=\\s*[B-D]\\)|\\s*CEVAP:|$)`, 's');
+          const regex = new RegExp(`${opt}\\)\\s*(.*?)(?=\\s*[B-D]\\)|\\s*CEVAP:|\\s*YAKIN:|$)`, 's');
           const match = aiText.match(regex);
           return match ? `${opt}) ${match[1].trim()}` : "";
         });
         const answerMatch = aiText.match(/CEVAP:\s*([A-D])/);
+        const closeMatch = aiText.match(/YAKIN:\s*([A-D])/);
         modelMsg = {
           role: 'model',
           text: questionPart,
           options: options.filter(o => o !== ""),
           correctAnswer: answerMatch ? answerMatch[1] : undefined,
+          closeAnswer: closeMatch ? closeMatch[1] : undefined,
           type: 'quiz'
         };
       }
@@ -289,14 +322,16 @@ export default function App() {
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `8. sınıf ${subjects} konularından karışık ${questionCount} adet çoktan seçmeli soru hazırla. Her soru için şu formatı kullan: 
+        contents: `8. sınıf ${subjects} konularından karışık ${questionCount} adet çoktan seçmeli soru hazırla. 
+        Sorular "Yeni Nesil LGS" tarzında, uzun metinli, mantık ve muhakeme gerektiren, günlük hayatla ilişkilendirilmiş sorular olmalı.
+        Her soru için şu formatı kullan: 
         SORU: [Soru metni] 
         A) [Seçenek] 
         B) [Seçenek] 
         C) [Seçenek] 
         D) [Seçenek] 
         CEVAP: [Doğru Şık]
-        YAKIN: [Eğer varsa, doğruya en yakın olan yanlış şıkkı belirt, yoksa boş bırak]
+        YAKIN: [Doğruya en yakın olan, en güçlü çeldirici yanlış şıkkı belirt]
         Sorular arasına "---" koy.`
       });
 

@@ -1,5 +1,5 @@
 {
   "name": "uyguluyo.com - AI Destekli Öğrenme",
   "description": "Yapay zeka ile güçlendirilmiş, modern ve akıcı bir eğitim deneyimi.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["microphone"]
 }
