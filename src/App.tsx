@@ -61,22 +61,23 @@ interface PdfBook {
 }
 
 const pdfBooks: PdfBook[] = [
-  { title: '8. Sınıf Matematik Ders Kitabı', subject: 'Matematik', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/math/200/300' },
-  { title: '8. Sınıf Fen Bilimleri Ders Kitabı', subject: 'Fen Bilimleri', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/science/200/300' },
-  { title: '8. Sınıf Türkçe Ders Kitabı', subject: 'Türkçe', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/turkish/200/300' },
-  { title: '8. Sınıf İnkılap Tarihi Ders Kitabı', subject: 'İnkılap Tarihi', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/history/200/300' },
-  { title: '8. Sınıf İngilizce Ders Kitabı', subject: 'İngilizce', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/english/200/300' },
-  { title: '8. Sınıf Din Kültürü Ders Kitabı', subject: 'Din Kültürü', url: 'https://ogmmateryal.eba.gov.tr/panel/panel/EkitapListe.aspx', thumbnail: 'https://picsum.photos/seed/religion/200/300' },
+  { title: '8. Sınıf Matematik Ders Kitabı', subject: 'Matematik', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/math/200/300' },
+  { title: '8. Sınıf Fen Bilimleri Ders Kitabı', subject: 'Fen Bilimleri', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/science/200/300' },
+  { title: '8. Sınıf Türkçe Ders Kitabı', subject: 'Türkçe', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/turkish/200/300' },
+  { title: '8. Sınıf İnkılap Tarihi Ders Kitabı', subject: 'İnkılap Tarihi', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/history/200/300' },
+  { title: '8. Sınıf İngilizce Ders Kitabı', subject: 'İngilizce', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/english/200/300' },
+  { title: '8. Sınıf Din Kültürü Ders Kitabı', subject: 'Din Kültürü', url: 'http://aokul.gov.tr/Kitaplar/Kitaplar.aspx?type=2', thumbnail: 'https://picsum.photos/seed/religion/200/300' },
 ];
 
 interface Message {
   role: 'user' | 'model';
   text: string;
   image?: string;
+  video?: string;
   options?: string[];
   correctAnswer?: string;
   closeAnswer?: string;
-  type?: 'text' | 'quiz' | 'image';
+  type?: 'text' | 'quiz' | 'image' | 'video';
 }
 
 const books: Book[] = [
@@ -110,6 +111,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>('default');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const containerRef = useRef(null);
@@ -228,10 +230,15 @@ export default function App() {
       // Handle /resim command
       if (text.startsWith('/resim ')) {
         const prompt = text.replace('/resim ', '');
+        
         const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash-image',
-          contents: [{ parts: [{ text: `${prompt}, educational illustration for 8th grade students, clean, professional style` }] }],
-          config: { imageConfig: { aspectRatio: "1:1" } }
+          contents: [{ parts: [{ text: `${prompt}, educational illustration for 8th grade students, clean, professional style, clear labels` }] }],
+          config: { 
+            imageConfig: { 
+              aspectRatio: "1:1"
+            } 
+          }
         });
 
         let imageUrl = "";
@@ -243,9 +250,18 @@ export default function App() {
         }
 
         if (imageUrl) {
+          // Get AI to describe the image using the standard model
+          const descriptionResponse = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [{ role: 'user', parts: [
+              { text: `Aşağıdaki görseli bir 8. sınıf öğrencisine açıkla ve konuyu derinlemesine anlat. Görsel konusu: ${prompt}` },
+              { inlineData: { data: imageUrl.split(',')[1], mimeType: "image/png" } }
+            ]}]
+          });
+
           setChatMessages(prev => [...prev, { 
             role: 'model', 
-            text: `İşte senin için hazırladığım "${prompt}" görseli:`, 
+            text: descriptionResponse.text || `İşte senin için hazırladığım "${prompt}" görseli:`, 
             image: imageUrl,
             type: 'image'
           }]);
@@ -256,11 +272,48 @@ export default function App() {
         return;
       }
 
+      // Handle /video command
+      if (text.startsWith('/video ')) {
+        const prompt = text.replace('/video ', '');
+        
+        let operation = await ai.models.generateVideos({
+          model: 'veo-3.1-fast-generate-preview',
+          prompt: `${prompt}, educational animation, high quality, 8th grade level`,
+          config: {
+            numberOfVideos: 1,
+            resolution: '720p',
+            aspectRatio: '16:9'
+          }
+        });
+
+        // Poll for completion
+        while (!operation.done) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          operation = await ai.operations.getVideosOperation({operation: operation});
+        }
+
+        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (downloadLink) {
+          const videoUrl = `${downloadLink}&key=${process.env.GEMINI_API_KEY}`;
+          
+          setChatMessages(prev => [...prev, { 
+            role: 'model', 
+            text: `İşte senin için hazırladığım "${prompt}" videosu:`, 
+            video: videoUrl,
+            type: 'video'
+          }]);
+          playSound('success');
+        } else {
+          throw new Error("Video oluşturulamadı.");
+        }
+        return;
+      }
+
       const parts: any[] = [{ text: `Sen bir 8. sınıf ${selectedBook.title} öğretmenisin. Öğrencinin şu sorusuna veya mesajına yanıt ver: "${text}". 
       
       TALİMATLAR:
-      1. DERİN ARAŞTIRMA: Konuyu derinlemesine incele, sadece yüzeysel bilgi verme. Akademik ve güncel bilgileri kullan.
-      2. DETAYLI CEVAP: Yanıtların açıklayıcı, mantıksal temellere dayanan ve öğrencinin konuyu tam kavramasını sağlayacak detayda olsun.
+      1. DERİN ARAŞTIRMA VE ANALİZ: Konuyu derinlemesine incele, sadece yüzeysel bilgi verme. Akademik, güncel ve bilimsel verileri kullan. Görsel gönderildiyse görseli çok detaylı analiz et.
+      2. DETAYLI VE NET CEVAP: Yanıtların açıklayıcı, mantıksal temellere dayanan ve öğrencinin konuyu tam kavramasını sağlayacak detayda olsun. Karmaşık konuları basitleştirerek ama derinliğini koruyarak anlat.
       3. MOTİVASYON: Öğrenciyi her zaman teşvik et ve merakını canlı tut.
       
       Eğer öğrenci "beni sına", "soru sor" derse veya "Soru Oluştur" butonuna basarsa (mesajda bu yönde bir talep varsa), ona 4 şıklı (A, B, C, D) bir çoktan seçmeli soru sor. 
@@ -770,8 +823,21 @@ export default function App() {
                       : 'bg-white/5 border border-white/10 text-inherit rounded-tl-none'
                   }`}>
                     {msg.image && (
-                      <div className="mb-3 rounded-lg overflow-hidden border border-white/10">
-                        <img src={msg.image} alt="Uploaded" className="max-w-full h-auto" />
+                      <div 
+                        className="mb-3 rounded-lg overflow-hidden border border-white/10 cursor-zoom-in"
+                        onClick={() => setFullScreenImage(msg.image || null)}
+                      >
+                        <img src={msg.image} alt="Uploaded" className="max-w-full h-auto hover:scale-105 transition-transform duration-300" />
+                      </div>
+                    )}
+                    {msg.video && (
+                      <div className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black">
+                        <video 
+                          src={msg.video} 
+                          controls 
+                          className="w-full aspect-video"
+                          poster="https://picsum.photos/seed/video/800/450"
+                        />
                       </div>
                     )}
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
@@ -852,7 +918,7 @@ export default function App() {
                   value={aiInput}
                   onChange={(e) => setAiInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleStudyMessage(aiInput, selectedImage || undefined)}
-                  placeholder="Bir soru sor, fotoğraf gönder veya /resim [konu] yaz..."
+                  placeholder="Soru sor, fotoğraf gönder, /resim [konu] veya /video [konu] yaz..."
                   className="flex-1 bg-white/5 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-violet-500/50 transition-all text-inherit"
                 />
                 <button 
@@ -1072,6 +1138,34 @@ export default function App() {
           </div>
         </FadeInView>
       </section>
+
+      {/* Full Screen Image Modal */}
+      <AnimatePresence>
+        {fullScreenImage && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setFullScreenImage(null)}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6 cursor-zoom-out"
+          >
+            <motion.img 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              src={fullScreenImage} 
+              alt="Full Screen" 
+              className="max-w-full max-h-full rounded-2xl shadow-2xl"
+            />
+            <button 
+              onClick={() => setFullScreenImage(null)}
+              className="absolute top-10 right-10 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all"
+            >
+              <X size={24} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Settings Button (Bottom Left) */}
       <div className="fixed bottom-8 left-8 z-[60]">
